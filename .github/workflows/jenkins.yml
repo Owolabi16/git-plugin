@@ -32,7 +32,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # Fix for HPI packaging issue
+      # Create Maven extensions to ensure HPI plugin is loaded
       - name: Create Maven extensions file
         run: |
           mkdir -p .mvn
@@ -47,24 +47,13 @@ jobs:
           </extensions>
           EOF
 
-      # Alternative approach: Check if POM needs fixing
-      - name: Verify POM configuration
+      # Alternative: Use install goal to force proper packaging recognition
+      - name: Build plugin using install
         run: |
-          echo "Checking POM configuration..."
-          if ! grep -q "<extensions>true</extensions>" pom.xml; then
-            echo "Warning: maven-hpi-plugin may need <extensions>true</extensions>"
-          fi
-          
-          # Show current packaging
-          echo "Current packaging:"
-          grep -A 2 -B 2 "<packaging>" pom.xml || echo "No packaging found"
-
-      - name: Build plugin
-        run: |
-          echo "Building Jenkins plugin..."
+          echo "Building Jenkins plugin with install goal..."
           mvn --batch-mode --errors --fail-at-end --show-version \
             --settings .github/workflows/settings.xml \
-            clean compile hpi:hpi -DskipTests
+            clean install -DskipTests
         
       - name: Debug - List generated files
         run: |
@@ -72,9 +61,9 @@ jobs:
           find . -name "*.hpi" -o -name "*.jpi" | head -10
           echo "=== Target directory contents ==="
           ls -la target/ || echo "No target directory found"
-          echo "=== Looking for work directory ==="
+          echo "=== Maven work directory ==="
           find . -type d -name "work" | head -5
-          echo "=== All files in project ==="
+          echo "=== Plugin archives ==="
           find . -maxdepth 3 -type f -name "*.*pi" 2>/dev/null | head -10
 
       - name: Prepare plugin for Docker
@@ -95,25 +84,35 @@ jobs:
             return 1
           }
           
-          # Try to find and copy plugin file
+          # Try to find and copy plugin file in order of preference
           plugin_found=false
           
-          # Look for .hpi files first
-          while IFS= read -r -d '' file; do
-            if copy_plugin_file "$file"; then
+          # Check target directory first for .hpi files
+          for file in target/*.hpi; do
+            if [ -f "$file" ] && copy_plugin_file "$file"; then
               plugin_found=true
               break
             fi
-          done < <(find . -name "*.hpi" -type f -print0 2>/dev/null)
+          done
           
-          # If not found, look for .jpi files
+          # Check target directory for .jpi files
+          if [ "$plugin_found" = false ]; then
+            for file in target/*.jpi; do
+              if [ -f "$file" ] && copy_plugin_file "$file"; then
+                plugin_found=true
+                break
+              fi
+            done
+          fi
+          
+          # Look recursively for any plugin files
           if [ "$plugin_found" = false ]; then
             while IFS= read -r -d '' file; do
               if copy_plugin_file "$file"; then
                 plugin_found=true
                 break
               fi
-            done < <(find . -name "*.jpi" -type f -print0 2>/dev/null)
+            done < <(find . -name "*.hpi" -o -name "*.jpi" -type f -print0 2>/dev/null)
           fi
           
           # List what we have in docker-context
@@ -124,9 +123,11 @@ jobs:
           if [ ! -f docker-context/my-custom-git-plugin.jpi ]; then
             echo "ERROR: Plugin file not found!"
             echo "=== Debug: All potential plugin files ==="
-            find . -name "*.hpi" -o -name "*.jpi" -o -name "*.jar" | grep -E "(hpi|jpi|plugin)" || echo "No plugin files found"
+            find . -name "*.hpi" -o -name "*.jpi" -o -name "*.jar" | grep -i plugin || echo "No plugin files found"
             echo "=== Debug: Target directory tree ==="
             find target -type f 2>/dev/null | head -20 || echo "No target directory"
+            echo "=== Debug: Full directory listing ==="
+            find . -maxdepth 2 -type f | head -30
             exit 1
           fi
           
