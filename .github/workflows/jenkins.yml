@@ -14,7 +14,7 @@ env:
   DOCKER_REGISTRY: docker.io
   DOCKER_IMAGE: owolabialiu/my-jenkins-custom-git
   DOCKER_USERNAME: owolabialiu
-  HELM_CHART_PATH: helm-charts/charts/jenkins
+  HELM_CHART_PATH: helm/
   NAMESPACE: jenkins
 
 jobs:
