@@ -35,7 +35,7 @@ jobs:
         
     - name: Build plugin
       run: |
-        mvn --batch-mode --errors --fail-at-end --show-version --settings .github/workflows/settings.xml clean package -DskipTests
+        mvn --batch-mode --errors --fail-at-end --show-version --settings .github/workflows/settings.xml clean compile hpi:hpi -DskipTests
         
     - name: Debug - List generated files
       run: |
@@ -45,14 +45,17 @@ jobs:
     - name: Prepare plugin for Docker
       run: |
         mkdir -p docker-context
-        # Look for .hpi files in target directory
-        if [ -f target/*.hpi ]; then
-          cp target/*.hpi docker-context/my-custom-git-plugin.jpi
-        else
-          echo "No .hpi file found in target/"
-          find . -name "*.hpi" -exec cp {} docker-context/my-custom-git-plugin.jpi \;
-        fi
+        # Look for .hpi files (Jenkins plugin files)
+        find . -name "*.hpi" -type f -exec cp {} docker-context/my-custom-git-plugin.jpi \;
+        # Also check for .jpi files
+        find . -name "*.jpi" -type f -exec cp {} docker-context/my-custom-git-plugin.jpi \;
         ls -la docker-context/
+        # Verify we have the plugin file
+        if [ ! -f docker-context/my-custom-git-plugin.jpi ]; then
+          echo "ERROR: Plugin file not found!"
+          find . -name "*.hpi" -o -name "*.jpi"
+          exit 1
+        fi
         
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
