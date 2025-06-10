@@ -25,14 +25,33 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
         
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+        
     - name: Build plugin
       run: |
-        mvn clean package -DskipTests
+        mvn --batch-mode --errors --fail-at-end --show-version --settings .github/workflows/settings.xml clean package -DskipTests
+        
+    - name: Debug - List generated files
+      run: |
+        find . -name "*.hpi" -o -name "*.jpi"
+        ls -la target/ || echo "No target directory"
         
     - name: Prepare plugin for Docker
       run: |
         mkdir -p docker-context
-        cp target/*.hpi docker-context/my-custom-git-plugin.jpi
+        # Look for .hpi files in target directory
+        if [ -f target/*.hpi ]; then
+          cp target/*.hpi docker-context/my-custom-git-plugin.jpi
+        else
+          echo "No .hpi file found in target/"
+          find . -name "*.hpi" -exec cp {} docker-context/my-custom-git-plugin.jpi \;
+        fi
         ls -la docker-context/
         
     - name: Set up Docker Buildx
