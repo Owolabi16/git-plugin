@@ -3,7 +3,12 @@ name: Build and Deploy Custom Jenkins Plugin
 on:
   push:
     branches: [ master ]
-  workflow_dispatch:  
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'Dockerfile'
+      - '.github/workflows/jenkins.yml'
+  workflow_dispatch:    
 
 env:
   DOCKER_REGISTRY: docker.io
@@ -14,9 +19,6 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: git-plugin
     
     steps:
     - name: Checkout code
@@ -42,7 +44,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: jenkins-plugin
-        path: git-plugin/target/my-custom-git-plugin.hpi
+        path: target/my-custom-git-plugin.hpi
         retention-days: 7
 
   build-and-push-image:
@@ -60,7 +62,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: jenkins-plugin
-        path: git-plugin/target/
+        path: target/
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -87,8 +89,8 @@ jobs:
       id: build
       uses: docker/build-push-action@v5
       with:
-        context: git-plugin/target
-        file: git-plugin/target/Dockerfile
+        context: target
+        file: target/Dockerfile
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
